@@ -200,6 +200,17 @@ async function checkComponent(component) {
   }
 }
 
+// 상태 한글 변환
+function getStatusLabel(status) {
+  const labels = {
+    operational: '정상',
+    degraded: '지연',
+    partial: '부분 장애',
+    major: '장애',
+  };
+  return labels[status] || status;
+}
+
 // Discord 알림 전송
 async function sendDiscordAlert(type, component, prevStatus, newStatus) {
   if (!DISCORD_WEBHOOK_URL) return;
@@ -207,32 +218,64 @@ async function sendDiscordAlert(type, component, prevStatus, newStatus) {
   const colors = {
     down: 0xff0000,      // 빨강
     degraded: 0xffaa00,  // 주황
-    recovered: 0x00ff00, // 초록
+    recovered: 0x22c55e, // 초록
   };
 
-  const titles = {
-    down: `🔴 ${component.name} 장애 발생`,
-    degraded: `🟡 ${component.name} 성능 저하`,
-    recovered: `🟢 ${component.name} 복구 완료`,
+  const emojis = {
+    down: '🚨',
+    degraded: '⚠️',
+    recovered: '✅',
+  };
+
+  const descriptions = {
+    down: `**${component.name}** 서비스에 장애가 발생했습니다.`,
+    degraded: `**${component.name}** 서비스 응답이 지연되고 있습니다.`,
+    recovered: `**${component.name}** 서비스가 정상 복구되었습니다.`,
   };
 
   const embed = {
-    title: titles[type],
+    title: `${emojis[type]} ${type === 'down' ? '서비스 장애 발생' : type === 'degraded' ? '서비스 지연' : '서비스 복구'}`,
+    description: descriptions[type],
     color: colors[type],
     fields: [
-      { name: '서비스', value: component.name, inline: true },
-      { name: '상태', value: `${prevStatus} → ${newStatus}`, inline: true },
-      { name: '응답시간', value: `${component.latency}ms`, inline: true },
+      {
+        name: '📍 서비스',
+        value: component.name,
+        inline: true
+      },
+      {
+        name: '📊 상태 변경',
+        value: `${getStatusLabel(prevStatus)} → ${getStatusLabel(newStatus)}`,
+        inline: true
+      },
+      {
+        name: '⏱️ 응답시간',
+        value: `${component.latency}ms`,
+        inline: true
+      },
     ],
-    footer: { text: 'SnapFund Status' },
+    footer: {
+      text: '🔗 status.snapfund.xyz',
+    },
     timestamp: new Date().toISOString(),
   };
+
+  // 에러 메시지가 있으면 추가
+  if (component.error) {
+    embed.fields.push({
+      name: '❌ 오류 내용',
+      value: `\`${component.error}\``,
+      inline: false,
+    });
+  }
 
   try {
     await fetch(DISCORD_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ embeds: [embed] }),
+      body: JSON.stringify({
+        embeds: [embed],
+      }),
     });
   } catch (error) {
     console.error('Failed to send Discord alert:', error);
