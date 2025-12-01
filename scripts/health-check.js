@@ -18,26 +18,26 @@ const COMPONENTS = [
     id: 'api',
     name: 'API Server',
     url: 'https://api.snapfund.xyz/health',
-    expectJson: true,  // JSON 응답 기대
-    expectKey: 'status', // 응답에 이 키가 있어야 함
+    expectJson: true,
+    expectKey: 'status',
   },
   {
     id: 'web',
     name: '메인 사이트',
     url: 'https://snapfund.xyz',
-    expectText: 'SnapFund', // 응답에 이 텍스트가 포함되어야 함
+    checkErrorPage: true, // Oops 에러 페이지만 감지
   },
   {
     id: 'dashboard',
     name: '대시보드',
     url: 'https://dash.snapfund.xyz',
-    expectText: 'SnapFund',
+    checkErrorPage: true,
   },
   {
     id: 'help',
     name: '고객센터',
     url: 'https://help.snapfund.xyz',
-    expectText: 'SnapFund',
+    checkErrorPage: true,
   },
   {
     id: 'payment',
@@ -65,8 +65,11 @@ const KEYS = {
   CURRENT_STATUS: 'status:current',
   HISTORY: (date) => `status:history:${date}`,
   COMPONENT_HISTORY: (componentId, date) => `status:component:${componentId}:${date}`,
-  PREV_STATUS: 'status:previous',
+  FAIL_COUNT: (componentId) => `status:failcount:${componentId}`,
 };
+
+// 연속 실패 횟수 기준
+const FAIL_THRESHOLD = 3;
 
 // 전체 상태 계산
 function calculateOverallStatus(components) {
@@ -82,37 +85,32 @@ async function validateResponse(component, response) {
   try {
     const text = await response.text();
 
-    // 에러 페이지 패턴 감지
-    for (const pattern of ERROR_PATTERNS) {
-      if (pattern.includes('.*')) {
-        // 정규식 패턴
-        const regex = new RegExp(pattern, 'i');
-        if (regex.test(text)) {
-          return { valid: false, reason: '에러 페이지 감지' };
-        }
-      } else {
-        // 단순 텍스트 매칭
-        if (text.includes(pattern)) {
-          return { valid: false, reason: `에러 페이지 감지: "${pattern}"` };
+    // 에러 페이지 패턴 감지 (Oops 페이지 등)
+    if (component.checkErrorPage) {
+      for (const pattern of ERROR_PATTERNS) {
+        if (pattern.includes('.*')) {
+          const regex = new RegExp(pattern, 'i');
+          if (regex.test(text)) {
+            return { valid: false, reason: '에러 페이지 감지' };
+          }
+        } else {
+          if (text.includes(pattern)) {
+            return { valid: false, reason: '에러 페이지 감지' };
+          }
         }
       }
     }
 
-    // JSON 응답 검증
+    // JSON 응답 검증 (API용)
     if (component.expectJson) {
       try {
         const json = JSON.parse(text);
         if (component.expectKey && !(component.expectKey in json)) {
-          return { valid: false, reason: `응답에 "${component.expectKey}" 키 없음` };
+          return { valid: false, reason: `"${component.expectKey}" 키 없음` };
         }
       } catch {
         return { valid: false, reason: 'JSON 파싱 실패' };
       }
-    }
-
-    // 특정 텍스트 포함 검증
-    if (component.expectText && !text.includes(component.expectText)) {
-      return { valid: false, reason: `"${component.expectText}" 텍스트 없음` };
     }
 
     return { valid: true };
@@ -282,29 +280,62 @@ async function sendDiscordAlert(type, component, prevStatus, newStatus) {
   }
 }
 
+// 연속 실패 횟수 관리 및 상태 판정
+async function updateFailCount(component) {
+  const key = KEYS.FAIL_COUNT(component.id);
+
+  if (component.status === 'operational') {
+    // 정상이면 실패 횟수 초기화
+    await redis.del(key);
+    return { shouldAlert: false, confirmedStatus: 'operational' };
+  }
+
+  // 실패 횟수 증가
+  const failCount = await redis.incr(key);
+  await redis.expire(key, 3600); // 1시간 후 자동 만료
+
+  console.log(`  [FailCount] ${component.name}: ${failCount}/${FAIL_THRESHOLD}`);
+
+  if (failCount >= FAIL_THRESHOLD) {
+    // 연속 N회 실패 → 실제 장애로 판정
+    return { shouldAlert: true, confirmedStatus: component.status };
+  }
+
+  // 아직 임계값 미달 → 정상으로 간주 (알림 안 보냄)
+  return { shouldAlert: false, confirmedStatus: 'operational' };
+}
+
 // 상태 변경 감지 및 알림
 async function handleStatusChange(prevComponents, newComponents) {
   for (const newComp of newComponents) {
     const prevComp = prevComponents?.find(c => c.id === newComp.id);
-    const prevStatus = prevComp?.status || 'operational'; // 첫 실행시 operational로 간주
-    const newStatus = newComp.status;
+    const prevStatus = prevComp?.status || 'operational';
+
+    // 연속 실패 횟수 체크
+    const { shouldAlert, confirmedStatus } = await updateFailCount(newComp);
+
+    // 확정된 상태로 업데이트
+    newComp.status = confirmedStatus;
 
     // 상태가 동일하면 스킵
-    if (prevStatus === newStatus) continue;
+    if (prevStatus === confirmedStatus) continue;
 
-    console.log(`  [Alert] ${newComp.name}: ${prevStatus} → ${newStatus}`);
+    // 알림 조건 확인
+    if (!shouldAlert && confirmedStatus !== 'operational') continue;
 
-    // 장애 발생
-    if ((newStatus === 'major' || newStatus === 'partial') && prevStatus === 'operational') {
-      await sendDiscordAlert('down', newComp, prevStatus, newStatus);
+    console.log(`  [Alert] ${newComp.name}: ${prevStatus} → ${confirmedStatus}`);
+
+    // 장애 발생 (연속 3회 실패 확인됨)
+    if ((confirmedStatus === 'major' || confirmedStatus === 'partial') && prevStatus === 'operational') {
+      await sendDiscordAlert('down', newComp, prevStatus, confirmedStatus);
     }
     // 성능 저하
-    else if (newStatus === 'degraded' && prevStatus === 'operational') {
-      await sendDiscordAlert('degraded', newComp, prevStatus, newStatus);
+    else if (confirmedStatus === 'degraded' && prevStatus === 'operational') {
+      await sendDiscordAlert('degraded', newComp, prevStatus, confirmedStatus);
     }
     // 복구
-    else if (newStatus === 'operational' && (prevStatus === 'major' || prevStatus === 'partial' || prevStatus === 'degraded')) {
-      await sendDiscordAlert('recovered', newComp, prevStatus, newStatus);
+    else if (confirmedStatus === 'operational' && (prevStatus === 'major' || prevStatus === 'partial' || prevStatus === 'degraded')) {
+      await sendDiscordAlert('recovered', newComp, prevStatus, confirmedStatus);
     }
   }
 }
