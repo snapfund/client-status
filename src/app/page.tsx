@@ -32,24 +32,37 @@ async function getStatusData(): Promise<StatusData> {
 async function getComponentHistory(): Promise<{ [componentId: string]: DailyUptime[] }> {
   const history: { [componentId: string]: DailyUptime[] } = {};
 
+  // 초기화
+  for (const component of COMPONENTS) {
+    history[component.id] = [];
+  }
+
   try {
     const today = new Date();
+    const keys: string[] = [];
+    const keyMap: { key: string; componentId: string; date: string }[] = [];
 
+    // 모든 키를 한 번에 준비
     for (const component of COMPONENTS) {
-      history[component.id] = [];
-
-      // 최근 90일 데이터 조회
       for (let i = 0; i < 90; i++) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-
-        const data = await redis.get<DailyUptime>(KEYS.COMPONENT_HISTORY(component.id, dateStr));
-        if (data) {
-          history[component.id].push(data);
-        }
+        const key = KEYS.COMPONENT_HISTORY(component.id, dateStr);
+        keys.push(key);
+        keyMap.push({ key, componentId: component.id, date: dateStr });
       }
     }
+
+    // mget으로 한 번에 조회
+    const results = await redis.mget<(DailyUptime | null)[]>(...keys);
+
+    // 결과 매핑
+    results.forEach((data, index) => {
+      if (data) {
+        history[keyMap[index].componentId].push(data);
+      }
+    });
   } catch (error) {
     console.error('Failed to fetch component history from Redis:', error);
   }
