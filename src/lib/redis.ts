@@ -10,6 +10,7 @@ export const KEYS = {
   CURRENT_STATUS: 'status:current',
   HISTORY: (date: string) => `status:history:${date}`,
   COMPONENT_HISTORY: (componentId: string, date: string) => `status:component:${componentId}:${date}`,
+  FAIL_COUNT: (componentId: string) => `status:failcount:${componentId}`,
   INCIDENTS: 'incidents:active',
   INCIDENT: (id: string) => `incidents:${id}`,
 };
