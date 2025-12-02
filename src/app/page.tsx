@@ -4,8 +4,9 @@ import IncidentList from '@/components/IncidentList';
 import { redis, KEYS } from '@/lib/redis';
 import { StatusData, DailyUptime, Incident, COMPONENTS, StatusType } from '@/lib/types';
 
-// 60초마다 재검증
-export const revalidate = 60;
+// 동적 렌더링 강제 (Upstash Redis가 no-store fetch 사용)
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function getStatusData(): Promise<StatusData> {
   try {
