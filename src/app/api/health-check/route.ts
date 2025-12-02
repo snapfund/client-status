@@ -8,7 +8,7 @@ const COMPONENTS = [
   {
     id: 'api',
     name: 'API Server',
-    url: 'https://api.snapfund.xyz/health',
+    url: 'https://api.snapfund.xyz/api/health',
     expectJson: true,
     expectKey: 'status',
   },

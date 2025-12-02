@@ -1,4 +1,4 @@
-export type StatusType = 'operational' | 'degraded' | 'partial' | 'major';
+export type StatusType = 'operational' | 'degraded' | 'partial' | 'major' | 'unknown';
 
 export interface ComponentStatus {
   id: string;
@@ -43,7 +43,7 @@ export interface IncidentUpdate {
 }
 
 export const COMPONENTS = [
-  { id: 'api', name: 'API Server', url: 'https://api.snapfund.xyz/health' },
+  { id: 'api', name: 'API Server', url: 'https://api.snapfund.xyz/api/health' },
   { id: 'web', name: '메인 사이트', url: 'https://snapfund.xyz' },
   { id: 'dashboard', name: '대시보드', url: 'https://dash.snapfund.xyz' },
   { id: 'help', name: '고객센터', url: 'https://help.snapfund.xyz' },
