@@ -186,6 +186,7 @@ function getStatusLabel(status: StatusType): string {
     degraded: '지연',
     partial: '부분 장애',
     major: '장애',
+    unknown: '확인 중',
   };
   return labels[status] || status;
 }
