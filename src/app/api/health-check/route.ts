@@ -113,6 +113,9 @@ async function checkComponent(component: typeof COMPONENTS[0]): Promise<Componen
     const response = await fetch(component.url, {
       method: 'GET',
       signal: controller.signal,
+      headers: {
+        'User-Agent': 'SnapFund-HealthCheck/1.0',
+      },
     });
 
     clearTimeout(timeout);
