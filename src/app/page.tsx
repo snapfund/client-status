@@ -32,6 +32,7 @@ async function getStatusData(): Promise<StatusData> {
 
 async function getComponentHistory(): Promise<{ [componentId: string]: DailyUptime[] }> {
   const history: { [componentId: string]: DailyUptime[] } = {};
+  const HISTORY_DAYS = 30; // 90일 -> 30일로 축소
 
   // 초기화
   for (const component of COMPONENTS) {
@@ -41,17 +42,16 @@ async function getComponentHistory(): Promise<{ [componentId: string]: DailyUpti
   try {
     const today = new Date();
     const keys: string[] = [];
-    const keyMap: { key: string; componentId: string; date: string }[] = [];
+    const keyMap: { componentId: string }[] = [];
 
     // 모든 키를 한 번에 준비
     for (const component of COMPONENTS) {
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < HISTORY_DAYS; i++) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        const key = KEYS.COMPONENT_HISTORY(component.id, dateStr);
-        keys.push(key);
-        keyMap.push({ key, componentId: component.id, date: dateStr });
+        keys.push(KEYS.COMPONENT_HISTORY(component.id, dateStr));
+        keyMap.push({ componentId: component.id });
       }
     }
 
@@ -74,16 +74,13 @@ async function getComponentHistory(): Promise<{ [componentId: string]: DailyUpti
 async function getIncidents(): Promise<Incident[]> {
   try {
     const incidentIds = await redis.lrange(KEYS.INCIDENTS, 0, 10);
-    const incidents: Incident[] = [];
+    if (!incidentIds || incidentIds.length === 0) return [];
 
-    for (const id of incidentIds) {
-      const incident = await redis.get<Incident>(KEYS.INCIDENT(id as string));
-      if (incident) {
-        incidents.push(incident);
-      }
-    }
+    // mget으로 한 번에 조회 (순차 조회 대신)
+    const keys = incidentIds.map(id => KEYS.INCIDENT(id as string));
+    const results = await redis.mget<(Incident | null)[]>(...keys);
 
-    return incidents;
+    return results.filter((incident): incident is Incident => incident !== null);
   } catch (error) {
     console.error('Failed to fetch incidents from Redis:', error);
     return [];
