@@ -5,8 +5,8 @@ import IncidentList from '@/components/IncidentList';
 import { redis, KEYS } from '@/lib/redis';
 import { StatusData, DailyUptime, Incident, COMPONENTS, StatusType } from '@/lib/types';
 
-// 30초마다 백그라운드에서 재생성 (ISR)
-export const revalidate = 30;
+// 동적 렌더링 (빌드 시 정적 생성 스킵)
+export const dynamic = 'force-dynamic';
 
 const HISTORY_DAYS = 90;
 
