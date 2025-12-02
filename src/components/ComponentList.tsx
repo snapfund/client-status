@@ -14,9 +14,10 @@ export default function ComponentList({ components, history }: ComponentListProp
     <div className="space-y-4">
       {components.map((component) => {
         const componentHistory = history[component.id] || [];
-        const avgUptime = componentHistory.length > 0
-          ? componentHistory.reduce((sum, d) => sum + d.uptime, 0) / componentHistory.length
-          : 100;
+        const dataWithChecks = componentHistory.filter(d => d.checks > 0);
+        const avgUptime = dataWithChecks.length > 0
+          ? dataWithChecks.reduce((sum, d) => sum + d.uptime, 0) / dataWithChecks.length
+          : null;
 
         return (
           <div
@@ -37,7 +38,7 @@ export default function ComponentList({ components, history }: ComponentListProp
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-500">
-                  {avgUptime.toFixed(2)}%
+                  {avgUptime !== null ? `${avgUptime.toFixed(2)}%` : '-'}
                 </span>
                 <StatusIndicator status={component.status} />
               </div>

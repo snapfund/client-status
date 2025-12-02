@@ -7,22 +7,22 @@ interface MiniUptimeChartProps {
   days?: number;
 }
 
-function getUptimeColor(uptime: number): string {
+function getUptimeColor(uptime: number, checks: number): string {
+  if (checks === 0) return 'bg-gray-300 dark:bg-gray-700';
   if (uptime >= 99.9) return 'bg-green-500';
   if (uptime >= 99) return 'bg-green-400';
   if (uptime >= 95) return 'bg-yellow-500';
   if (uptime >= 90) return 'bg-orange-500';
-  if (uptime > 0) return 'bg-red-500';
-  return 'bg-gray-200 dark:bg-gray-700';
+  return 'bg-red-500';
 }
 
-function getStatusLabel(uptime: number): string {
+function getStatusLabel(uptime: number, checks: number): string {
+  if (checks === 0) return '데이터 없음';
   if (uptime >= 99.9) return '정상';
   if (uptime >= 99) return '양호';
   if (uptime >= 95) return '저하';
   if (uptime >= 90) return '불안정';
-  if (uptime > 0) return '장애';
-  return '데이터 없음';
+  return '장애';
 }
 
 function formatDate(dateStr: string): string {
@@ -53,7 +53,7 @@ export default function MiniUptimeChart({ data, days = 90 }: MiniUptimeChartProp
       {chartData.map((day) => (
         <div
           key={day.date}
-          className={`flex-1 ${getUptimeColor(day.uptime)} rounded-sm cursor-pointer hover:opacity-80 transition-opacity group relative`}
+          className={`flex-1 ${getUptimeColor(day.uptime, day.checks)} rounded-sm cursor-pointer hover:opacity-80 transition-opacity group relative`}
         >
           {/* Tooltip */}
           <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 pointer-events-none">
@@ -67,20 +67,23 @@ export default function MiniUptimeChart({ data, days = 90 }: MiniUptimeChartProp
               <div className="flex justify-between items-center mb-1">
                 <span className="text-gray-400">상태</span>
                 <span className={`font-medium ${
+                  day.checks === 0 ? 'text-gray-400' :
                   day.uptime >= 99.9 ? 'text-green-400' :
                   day.uptime >= 95 ? 'text-yellow-400' :
                   day.uptime >= 90 ? 'text-orange-400' :
                   'text-red-400'
                 }`}>
-                  {getStatusLabel(day.uptime)}
+                  {getStatusLabel(day.uptime, day.checks)}
                 </span>
               </div>
 
               {/* 가동률 */}
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-gray-400">가동률</span>
-                <span className="font-medium">{day.uptime.toFixed(2)}%</span>
-              </div>
+              {day.checks > 0 && (
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-400">가동률</span>
+                  <span className="font-medium">{day.uptime.toFixed(2)}%</span>
+                </div>
+              )}
 
               {/* 체크 횟수 */}
               {day.checks > 0 && (
