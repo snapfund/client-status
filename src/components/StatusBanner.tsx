@@ -6,7 +6,7 @@ interface StatusBannerProps {
   status: StatusType;
 }
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; bgColor: string; icon: string }> = {
   operational: {
     label: '모든 시스템 정상 운영 중',
     bgColor: 'bg-green-500',
@@ -27,10 +27,15 @@ const statusConfig = {
     bgColor: 'bg-red-500',
     icon: '✕',
   },
+  unknown: {
+    label: '시스템 상태 확인 중',
+    bgColor: 'bg-gray-500',
+    icon: '?',
+  },
 };
 
 export default function StatusBanner({ status }: StatusBannerProps) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] || statusConfig.unknown;
 
   return (
     <div className={`${config.bgColor} rounded-lg p-6 text-white mb-8`}>
